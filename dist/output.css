@@ -780,6 +780,28 @@ p{
   border-radius: var(--border-radius-lg);
 }
 
+@media (max-width: 640px) {
+  .btn{
+    padding-left: 1rem;
+    padding-right: 1rem;
+    padding-top: 0.5rem;
+    padding-bottom: 0.5rem;
+    font-size: 0.875rem;
+    line-height: 1.25rem;
+    min-height: 40px;
+  }
+
+  .btn-lg{
+    padding-left: 1.5rem;
+    padding-right: 1.5rem;
+    padding-top: 0.75rem;
+    padding-bottom: 0.75rem;
+    font-size: 1rem;
+    line-height: 1.5rem;
+    min-height: 44px;
+  }
+}
+
 .btn-sm{
   padding-left: 1rem;
   padding-right: 1rem;
@@ -1192,10 +1214,6 @@ p{
 
 .inline-block{
   display: inline-block;
-}
-
-.inline{
-  display: inline;
 }
 
 .flex{
