@@ -358,11 +358,19 @@ class AnimationObserver {
 class DiscordIntegration {
     constructor() {
         this.serverId = '1350840224028164096';
-        // CORS proxy to avoid CORS issues
-        this.apiUrl = `https://api.allorigins.win/get?url=${encodeURIComponent(`https://discord.com/api/guilds/${this.serverId}/widget.json`)}`;
+        // Multiple CORS proxies for better reliability
+        this.proxies = [
+            'https://api.codetabs.com/v1/proxy?quest=',
+            'https://corsproxy.io/?',
+            'https://api.allorigins.win/get?url=',
+            'direct'
+        ];
+        this.currentProxyIndex = 0;
+        this.baseUrl = `https://discord.com/api/guilds/${this.serverId}/widget.json`;
+        this.apiUrl = this.getProxyUrl();
         this.refreshInterval = 20000;
-        this.retryAttempts = 2;
-        this.retryDelay = 1000;
+        this.retryAttempts = 3;
+        this.retryDelay = 2000;
         this.lastUpdateTime = null;
         this.refreshTimer = null;
         this.cache = new Map();
@@ -454,6 +462,30 @@ class DiscordIntegration {
         }
     }
 
+    getProxyUrl() {
+        /**
+         * Gets the current proxy URL for the Discord API.
+         * @returns {string} The proxy URL.
+         */
+        const proxy = this.proxies[this.currentProxyIndex];
+        if (proxy === 'direct') {
+            return this.baseUrl;
+        } else if (proxy.includes('allorigins.win')) {
+            return `${proxy}${encodeURIComponent(this.baseUrl)}`;
+        } else {
+            return `${proxy}${encodeURIComponent(this.baseUrl)}`;
+        }
+    }
+
+    switchToNextProxy() {
+        /**
+         * Switches to the next available proxy.
+         */
+        this.currentProxyIndex = (this.currentProxyIndex + 1) % this.proxies.length;
+        this.apiUrl = this.getProxyUrl();
+        console.log(`Switching to proxy: ${this.proxies[this.currentProxyIndex]}`);
+    }
+
     setupElements() {
         /**
          * Sets up references to DOM elements used by the Discord integration.
@@ -492,10 +524,14 @@ class DiscordIntegration {
             this.connectionStatus = 'connecting';
 
             const controller = new AbortController();
-            const timeoutId = setTimeout(() => controller.abort(), 5000);
+            const timeoutId = setTimeout(() => controller.abort(), 10000);
 
             const response = await fetch(this.apiUrl, {
-                signal: controller.signal
+                signal: controller.signal,
+                headers: {
+                    'Accept': 'application/json',
+                    'Cache-Control': 'no-cache'
+                }
             });
 
             clearTimeout(timeoutId);
@@ -504,8 +540,23 @@ class DiscordIntegration {
                 throw new Error(`HTTP ${response.status}: ${response.statusText}`);
             }
 
-            const proxyData = await response.json();
-            const data = JSON.parse(proxyData.contents);
+            const responseText = await response.text();
+            let data;
+
+            try {
+                const proxyData = JSON.parse(responseText);
+                if (this.proxies[this.currentProxyIndex] === 'direct') {
+                    data = proxyData;
+                } else if (proxyData.contents) {
+                    data = JSON.parse(proxyData.contents);
+                } else if (proxyData.status && proxyData.status.url) {
+                    data = proxyData;
+                } else {
+                    data = proxyData;
+                }
+            } catch (parseError) {
+                data = JSON.parse(responseText);
+            }
 
             if (!this.validateDiscordData(data)) {
                 throw new Error('Invalid data structure received from Discord API');
@@ -519,16 +570,21 @@ class DiscordIntegration {
 
         } catch (error) {
             this.consecutiveFailures++;
-            console.error(`Discord API fetch attempt ${attempt} failed:`, error);
+            console.error(`Discord API fetch attempt ${attempt} failed using ${this.proxies[this.currentProxyIndex]}:`, error);
 
             if (attempt < this.retryAttempts) {
+                if (attempt > 1) {
+                    this.switchToNextProxy();
+                }
+                
                 const delay = this.retryDelay * attempt;
-                console.log(`Retrying in ${delay}ms...`);
+                console.log(`Retrying in ${delay}ms with ${this.proxies[this.currentProxyIndex]}...`);
 
                 setTimeout(() => {
                     this.fetchData(attempt + 1, skipCache);
                 }, delay);
             } else {
+                console.warn('All proxy attempts failed, falling back to cached data');
                 this.connectionStatus = 'failed';
                 this.handleFetchFailure();
             }
@@ -881,6 +937,9 @@ class DiscordIntegration {
          * Manually refreshes the Discord data.
          */
         console.log('Manual refresh triggered');
+        this.currentProxyIndex = 0;
+        this.apiUrl = this.getProxyUrl();
+        this.consecutiveFailures = 0;
         this.fetchData(1, true);
     }
 
@@ -1009,8 +1068,6 @@ class PerformanceOptimizer {
         document.documentElement.style.setProperty('--transition-fast', '100ms');
         document.documentElement.style.setProperty('--transition-normal', '150ms');
         document.documentElement.style.setProperty('--transition-slow', '200ms');
-
-        // Disable expensive effects
         $$('.gradient-hero, .gradient-text').forEach(el => {
             el.style.backgroundSize = '100% 100%';
             el.style.animation = 'none';
